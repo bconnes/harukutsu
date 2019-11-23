@@ -2,18 +2,27 @@ package com.brandon.harukutsu;
 
 
 
+import com.brandon.harukutsu.dao.ArticleDao;
 import com.brandon.harukutsu.model.Article;
 import com.brandon.harukutsu.model.KanjiPhrase;
 import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
 import org.json.simple.parser.JSONParser;
+import org.json.simple.parser.ParseException;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.CommandLineRunner;
+import org.springframework.context.annotation.Bean;
+import org.springframework.stereotype.Component;
 
+import javax.persistence.EntityManager;
+import javax.persistence.EntityManagerFactory;
+import javax.persistence.Persistence;
 import java.io.*;
 import java.net.URL;
 import java.time.LocalDateTime;
@@ -28,6 +37,7 @@ import java.util.UUID;
  * @since 11/13/2019
  */
 
+@Component
 public class Kijiyomi
 {
     private static final Logger log = LoggerFactory.getLogger(Kijiyomi.class);
@@ -47,19 +57,40 @@ public class Kijiyomi
     public static final String FILE_TO_PARSE = "run_results.json";
 
 
+    @Autowired
+    private ArticleDao articleDao;
+
     public static void main(String[] args) throws Exception
     {
         Kijiyomi kj = new Kijiyomi();
-        File file = kj.getFileFromResources(FILE_TO_PARSE);
 
-        Object obj = new JSONParser().parse(new FileReader(file));
-        JSONObject jo = (JSONObject) obj;
-
-        kj.readArticles(jo);
+        kj.run();
     }
 
-    private List<Article>  readArticles(JSONObject jo)
+    private void run()
     {
+        List<Article> articles = readArticles();
+    }
+
+    private void persist(List<Article> articles)
+    {
+        articles.forEach((ar) -> articleDao.insertArticle(ar));
+    }
+
+    public List<Article> readArticles()
+    {
+        File file = getFileFromResources(FILE_TO_PARSE);
+        Object obj = null;
+        try
+        {
+            obj = new JSONParser().parse(new FileReader(file));
+        }
+        catch (IOException | ParseException e)
+        {
+            log.error("Exception: ", e);
+        }
+
+        JSONObject jo = (JSONObject) obj;
         JSONArray articles = (JSONArray) jo.get(ARTICLE);
 
         List<Article> articleList = new ArrayList<>();
@@ -113,7 +144,6 @@ public class Kijiyomi
         }
 
         Article article = new Article(
-            UUID.randomUUID(),
             time,
             url,
             headlineText,
